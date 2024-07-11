@@ -1,9 +1,9 @@
 const { PermissionsBitField } = require('discord.js');
-const sqlite3 = require('sqlite3').verbose();
+const db = require('../database/db');
 const expenseTrackingChannels = {};
 
 const startExpenseTracking = async (msg) => {
-    const db = new sqlite3.Database('./expenses.db');
+    console.log(msg.content);
     db.get(`SELECT channel_id FROM channels WHERE user_id = ?`, [msg.author.id], async (err, row) => {
         if (err) {
             console.error(err.message);
@@ -53,11 +53,18 @@ const startExpenseTracking = async (msg) => {
         } catch (err) {
             console.log(err);
             return await msg.channel.send('An error occurred while creating your expense tracking channel.');
-        } finally {
-            db.close();
         }
     });
 }
+
+process.on('exit', () => {
+    db.close((err) => {
+        if (err) {
+            console.error(err.message);
+        }
+        console.log('Closed the database connection.');
+    });
+});
 
 module.exports = startExpenseTracking;
 module.exports.expenseTrackingChannels = expenseTrackingChannels;

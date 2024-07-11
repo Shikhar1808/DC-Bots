@@ -1,9 +1,12 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
-const sqlite3 = require('sqlite3').verbose();
+
+const db = require('./database/db');
 
 const startExpenseTracking = require('./commands/startExpenseTracking');
 const { expenseTrackingChannels } = require('./commands/startExpenseTracking');
+const addexpense = require('./commands/addExpense');
+const showAllExpenses = require('./commands/showAllExpenses');
 
 const client = new Client({ 
     intents: [
@@ -11,25 +14,6 @@ const client = new Client({
         GatewayIntentBits.GuildMessages, 
         GatewayIntentBits.MessageContent
     ] 
-});
-
-const db = new sqlite3.Database('./expenses.db', sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
-    if (err) {
-        console.error(err.message);
-    } else {
-        console.log('Connected to the expenses database.');
-        db.run(`CREATE TABLE IF NOT EXISTS expenses (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user TEXT NOT NULL,
-            amount REAL NOT NULL,
-            description TEXT NOT NULL,
-            date TEXT NOT NULL
-        )`);
-        db.run(`CREATE TABLE IF NOT EXISTS channels (
-            user_id TEXT PRIMARY KEY,
-            channel_id TEXT NOT NULL
-        )`);
-    }
 });
 
 const loadChannels = () => {
@@ -62,26 +46,45 @@ client.once('ready', () => {
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
+    const prefix = '!';
+    if (!message.content.startsWith(prefix)) return;
+
     const args = message.content.split(' ');
     const command = args.shift().toLowerCase();
-
-    if (command === '!startexpensetracking') {
-        await startExpenseTracking(message);
-        return;
-    }
-
+    
     const userChannelID = expenseTrackingChannels[message.author.id];
-    if (!userChannelID) {
-        return message.channel.send('You have not started expense tracking yet. Use the command `!startExpenseTracking` to start expense tracking.');
-    }
-
     const userChannel = message.guild.channels.cache.get(userChannelID);
-    if (!userChannel || message.channel.id !== userChannelID) {
-        return message.channel.send('You are not allowed to use this command in this channel.');
-    }
-
-    if (command === '!addexpense') {
-        message.channel.send('The command is not in use.');
+    
+    switch (command) {
+        case '!startexpensetracking':
+            await startExpenseTracking(message);
+            if (!userChannelID) {
+                return message.channel.send('You have not started expense tracking yet. Use the command `!startExpenseTracking` to start expense tracking.');
+            }
+            break;
+    
+        case '!addexpense':
+            if (!userChannelID || !userChannel || message.channel.id !== userChannelID) {
+                return message.channel.send(`You are not allowed to use this command in this channel. Please use your expense tracking channel.${userChannel?userChannel:"If not created, create the one using `!startExpenseTracking`"} ` );
+            }
+            await addexpense(message, db);
+            break;
+    
+        case '!showallexpenses':
+            if (!userChannelID || !userChannel || message.channel.id !== userChannelID) {
+                return message.channel.send(`You are not allowed to use this command in this channel. Please use your expense tracking channel. ${userChannel?userChannel:"If not created, create the one using `!startExpenseTracking`"}`);
+            }
+            await showAllExpenses(message, db);
+            break;
+    
+        case '!deleteexpense':
+        case '!acountmoney':
+        case '!moneyreceived':
+            console.log('This command is not implemented yet.');
+            break;
+    
+        default:
+            break;
     }
 });
 
